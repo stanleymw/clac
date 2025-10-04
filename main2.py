@@ -1,4 +1,7 @@
+#!/bin/python3
+
 import ast
+import sys
 from enum import Enum
 from typing import List, Union
 
@@ -11,42 +14,12 @@ binops = {
         "Pow": "**",
 }
 
-print("Seirea CLAC Compiler")
+if (len(sys.argv) < 2):
+    print("Usage: ./main.py <file.py>")
+    exit()
 
-source2 = """
-x = (4//2) * 5
-y = x + 1
-z = x * y
-
-print(z)
-
-a = x + y + z
-print(a)
-"""
-
-source4 = """
-y = 56
-z = y + 1
-print(y)
-print(z)
-"""
-source3 = """
-def add(a,b):
-    return (a * 2) + b
-
-y = 7
-print(add(y,y))
-"""
-
-source5 = """
-x = 1
-if x:
-    print(1)
-else:
-    print(2)
-"""
-
-with open("ex2.py", "r") as f:
+print("Seirea CLAC Compiler v0.1.0")
+with open(sys.argv[1], "r") as f:
     tree = ast.parse(f.read())
 # tree = ast.parse(source5)
 print(ast.dump(tree, indent=4))
@@ -228,6 +201,9 @@ class ClacCompile(ast.NodeVisitor):
         self.current_stack_position -= 1
 
 cv = ClacCompile()
-print(cv.compile(tree))
+res = cv.compile(tree)
+print(res)
 print([(i,v.value) for (i,v) in cv.variables.items()])
 print("Stack pos:", cv.current_stack_position)
+with open("output.clac", "w") as w:
+    w.write(res)
