@@ -38,7 +38,17 @@ y = 7
 print(add(y,y))
 """
 
-tree = ast.parse(source3)
+source5 = """
+x = 1
+if x:
+    print(1)
+else:
+    print(2)
+"""
+
+with open("ex2.py", "r") as f:
+    tree = ast.parse(f.read())
+# tree = ast.parse(source5)
 print(ast.dump(tree, indent=4))
 
 class QueueInstruction():
@@ -61,9 +71,12 @@ class FuncValue(QueueInstruction):
 def get_return_amount(ret: ast.Return):
     match ret.value.__class__:
         case ast.Tuple:
-            return len(ret.value.elts)
+            assert(len(ret.value.elts) == 2)
+            return 2
         case ast.Name | ast.Constant | ast.BinOp:
             return 1
+        case ast.Call:
+            return len(ret.value.args)
         case _:
             raise Exception("Unknown return type")
 
@@ -88,15 +101,24 @@ class ClacCompile(ast.NodeVisitor):
         new_compile = ClacCompile()
         args = node.args.args
 
+        # export this function to our current compiler
         self.variables[node.name] = FuncValue(node.name, len(args), get_return_amount(node.body[-1]))
 
         # print("(0) parent vars:", self.variables, "child vars:", new_compile.variables)
+        # give local variables to function
         for i in range(len(args)):
             new_compile.variables[args[i].arg] = IntValue(i + 1)
 
+        # set function stack pos (after the local variables)
         new_compile.current_stack_position = len(args)
 
+        # give the function itself to the function
         new_compile.variables[node.name] = self.variables[node.name]
+
+        # give our functions to the compiler
+        for i,v in self.variables.items():
+            if (v.__class__ == FuncValue):
+                new_compile.variables[v.value] = v
 
         # print("parent:", self, "child:", new_compile)
         # print("(1) parent vars:", self.variables, "child vars:", new_compile.variables)
@@ -113,9 +135,12 @@ class ClacCompile(ast.NodeVisitor):
 
     def visit_Return(self, node):
         self.generic_visit(node)
+
+        return_amount = get_return_amount(node)
         # asd asd asd a b
-        if node.value.__class__ == ast.Tuple:
-            assert(len(node.value.elts) == 2)
+        assert(return_amount == 2 or return_amount == 1)
+        if return_amount == 2:
+            # assert(len(node.value.elts) == 2)
 
             while (self.current_stack_position > 2):
                 self.generated += " rot drop "
