@@ -1,5 +1,5 @@
 x = 1
-if x:
-    print(1)
+if x-1:
+    print(x + 1)
 else:
-    print(2)
+    print(67)

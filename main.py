@@ -2,16 +2,19 @@
 
 import ast
 import sys
-from enum import Enum
-from typing import List, Union
+import types
 
 binops = {
-        "Add": "+",
-        "Sub": "-",
-        "Mult": "*",
-        "Mod": "%",
-        "FloorDiv": "/",
-        "Pow": "**",
+    "Add": "+",
+    "Sub": "-",
+    "Mult": "*",
+    "Mod": "%",
+    "FloorDiv": "/",
+    "Pow": "**",
+}
+
+compares = {
+    "Lt": "<",
 }
 
 if (len(sys.argv) < 2):
@@ -42,24 +45,37 @@ class FuncValue(QueueInstruction):
         self.num_returns = num_returns
 
 def get_return_amount(ret: ast.Return):
+    assert isinstance(ret, ast.Return), f"not return, {ret}"
     match ret.value.__class__:
         case ast.Tuple:
-            assert(len(ret.value.elts) == 2)
+            assert len(ret.value.elts) == 2, "Invalid multi-return amount"
             return 2
         case ast.Name | ast.Constant | ast.BinOp:
             return 1
         case ast.Call:
             return len(ret.value.args)
+        case types.NoneType:
+            return 0
         case _:
-            raise Exception("Unknown return type")
+            raise Exception(f"Unknown return type {ret.value}")
+        
+
+if_blocks = [
+
+]
+
+preamble = """
+: dup 1 pick ;
+: noop ;
+"""
 
 class ClacCompile(ast.NodeVisitor):
-    def __init__(self):
+    def __init__(self, current_stack_position, generated):
         self.variables: dict[str, QueueInstruction] = {
-            "print": FuncValue("print", 1, 0)
+            "print": FuncValue("print", 1, 0),
         }
-        self.current_stack_position = 0
-        self.generated = ""
+        self.current_stack_position = current_stack_position
+        self.generated = generated
 
     def compile(self, node):
         print(self,"variables:", self.variables)
@@ -71,19 +87,17 @@ class ClacCompile(ast.NodeVisitor):
         print(f"Found function def: {node.name}")
         self.generated += f": {node.name} "
 
-        new_compile = ClacCompile()
         args = node.args.args
+        new_compile = ClacCompile(len(args), "")
 
         # export this function to our current compiler
+        
         self.variables[node.name] = FuncValue(node.name, len(args), get_return_amount(node.body[-1]))
 
         # print("(0) parent vars:", self.variables, "child vars:", new_compile.variables)
         # give local variables to function
         for i in range(len(args)):
             new_compile.variables[args[i].arg] = IntValue(i + 1)
-
-        # set function stack pos (after the local variables)
-        new_compile.current_stack_position = len(args)
 
         # give the function itself to the function
         new_compile.variables[node.name] = self.variables[node.name]
@@ -111,24 +125,29 @@ class ClacCompile(ast.NodeVisitor):
 
         return_amount = get_return_amount(node)
         # asd asd asd a b
-        assert(return_amount == 2 or return_amount == 1)
-        if return_amount == 2:
-            # assert(len(node.value.elts) == 2)
+        # assert return_amount == 2 or return_amount == 1, "Invalid return amount (v2)"
+        match return_amount:
+            case 2:
+                while (self.current_stack_position > 2):
+                    self.generated += " rot drop "
+                    self.current_stack_position -= 1
+            case 1:
+                while (self.current_stack_position > 1):
+                    self.generated += " swap drop "
+                    self.current_stack_position -= 1
+            case 0:
+                while (self.current_stack_position > 0):
+                    self.generated += " drop "
+                    self.current_stack_position -= 1
+            case _:
+                raise Exception("Invalid return amount (v2)")
 
-            while (self.current_stack_position > 2):
-                self.generated += " rot drop "
-                self.current_stack_position -= 1
-        else:
-            # should be one item
-            while (self.current_stack_position > 1):
-                self.generated += " swap drop "
-                self.current_stack_position -= 1
         print("RETURNING", self, node.value)
 
     def visit_Assign(self, node):
         # print("MY VARIABLES:", self.variables, self)
-        assert(len(node.targets)==1)
-        assert(node.targets[0].ctx.__class__ == ast.Store)
+        assert len(node.targets)==1, "can only assign to one variable"
+        assert node.targets[0].ctx.__class__ == ast.Store, "must be storing variable"
 
         print(f"Found assign: {node.targets[0].id}")
         # Important: Continue traversing child nodes
@@ -170,8 +189,11 @@ class ClacCompile(ast.NodeVisitor):
     def visit_Call(self, node):
         func = self.variables[node.func.id]
 
-        assert(len(node.args) == func.num_args)
+        assert len(node.args) == func.num_args, "called function with wrong number of args"
+        prev_stack_len = self.current_stack_position
         self.generic_visit(node)
+        new_stack_len = self.current_stack_position
+        assert new_stack_len == prev_stack_len + len(node.args), "args were not properly pushed onto the stack. Perhaps, not existent args"
 
         # FIXME: every defined function needs to report how much they change the stack position
         # REQUIREMENT FOR FUNCTIONS: THE STACK SIZE MUST NOT CHANGE
@@ -187,21 +209,76 @@ class ClacCompile(ast.NodeVisitor):
     def visit_Expr(self, node):
         self.generic_visit(node)
 
+    def visit_If(self, node):
+        print("If detected:", node)
+
+        self.visit(node.test)
+
+        self.current_stack_position -= 1
+
+        compiled = self.compile_expr_as_block(node.body)
+        body_block = create_if_block(compiled)
+
+        compiled_else = self.compile_expr_as_block(node.orelse)
+        else_block = create_if_block(compiled_else)
+
+        self.generated += f" if {body_block} 1 skip {else_block} "
+
     def visit_BinOp(self, node):
         # is_valid = False
         # for i in BINOPS:
         #     is_valid |= isinstance(node.op, i)
         # assert(is_valid)
         opname = (node.op.__class__.__name__)
-        assert(opname in binops.keys())
+        assert opname in binops.keys(), "invalid binop"
 
         print(f"BINOP {self}: {opname}")
         self.generic_visit(node)
         self.generated += f" {binops[opname]} "
         self.current_stack_position -= 1
 
-cv = ClacCompile()
-res = cv.compile(tree)
+    def visit_Compare(self, node):
+        # is_valid = False
+        # for i in BINOPS:
+        #     is_valid |= isinstance(node.op, i)
+        # assert(is_valid)
+        assert len(node.ops) == 1, "can only compare one thing"
+        assert len(node.comparators) == 1, "should only use one comparator"
+        opname = (node.ops[0].__class__.__name__)
+        assert opname in compares.keys(), "invalid comparator"
+
+        print(f"COMPARE {self}: {opname}")
+        self.generic_visit(node)
+        self.generated += f" {compares[opname]} "
+        self.current_stack_position -= 1
+
+    def compile_expr_as_block(self, expr) -> str:
+        new_compile = ClacCompile(self.current_stack_position, "")
+
+        # give our state to the compiler
+        new_compile.variables = self.variables.copy()
+
+        for stmt in expr:
+            # print(f"  Body Statement: {type(stmt).__name__}, Code: {ast.unparse(stmt).strip()}")
+            new_compile.visit(stmt)
+
+        # required to not mess up the if statement
+        assert new_compile.current_stack_position == self.current_stack_position, "if statement blocks must not affect the stack"
+        return new_compile.generated
+    
+def create_if_block(gen: str) -> str:
+    id = len(if_blocks)
+    name = get_block_name_from_id(id)
+    if_blocks.append(f": {name} {gen} ;")
+    return name
+
+def get_block_name_from_id(id: int) -> str:
+    return f"__CLACC_IF_BLOCK_{id}_"
+
+cv = ClacCompile(0, "")
+compiled = cv.compile(tree)
+if_blocks += "\n"
+res = preamble + "\n".join([i for i in if_blocks]) + compiled
 print(res)
 print([(i,v.value) for (i,v) in cv.variables.items()])
 print("Stack pos:", cv.current_stack_position)
