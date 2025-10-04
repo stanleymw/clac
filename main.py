@@ -92,7 +92,54 @@ class ClacCompile(ast.NodeVisitor):
 
         # export this function to our current compiler
         
-        self.variables[node.name] = FuncValue(node.name, len(args), get_return_amount(node.body[-1]))
+        found_ret = None
+
+
+        def body_has_type(data_list, target_type):
+            for obj in data_list:
+                if isinstance(obj, target_type):
+                    return True
+            return False
+        
+        def well_defined_if(if_node):
+            # check body
+            body_ret = False
+            orelse_ret = False
+            if (not body_has_type(if_node.body, ast.If)):
+                # no ifs in body, so the last element should be return
+                assert not body_has_type(if_node.body[:-1], ast.Return), "only the last element in the if should be return"
+                body_ret = isinstance(if_node.body[-1], ast.Return)
+            else:
+                # we do have ifs, so all of them must be well defined
+                for expr in if_node.body:
+                    if isinstance(expr, ast.If) and not well_defined_if(expr):
+                        return False
+
+            if (not body_has_type(if_node.orelse, ast.If)):
+                # no ifs in body, so the last element should be return
+                assert not body_has_type(if_node.orelse[:-1], ast.Return), "only the last element in the if should be return"
+                orelse_ret = isinstance(if_node.orelse[-1], ast.Return)
+            else:
+                # we do have ifs, so both of those should be good
+                for expr in if_node.body:
+                    if isinstance(expr, ast.If) and not well_defined_if(expr):
+                        return False
+
+            # check orelse
+            return (body_ret and orelse_ret) or (not body_ret and not orelse_ret)
+        
+
+        if not (body_has_type(node.body, ast.If)):
+            # do naive check for true (it should just be the last element)
+            found_ret = node.body[-1]
+        else:
+            found_ret = well_defined_if()
+            # recursively check all ifs. If one of the ifs has a return, then the other must have as well
+
+
+        # def return_in_block(if_node):
+            
+        self.variables[node.name] = FuncValue(node.name, len(args), get_return_amount(found_ret))
 
         # print("(0) parent vars:", self.variables, "child vars:", new_compile.variables)
         # give local variables to function
@@ -151,7 +198,9 @@ class ClacCompile(ast.NodeVisitor):
 
         print(f"Found assign: {node.targets[0].id}")
         # Important: Continue traversing child nodes
+        before_assign_stack = self.current_stack_position
         self.generic_visit(node)
+        assert self.current_stack_position > before_assign_stack, "stack should be larger when assigning! (sanity check)"
         self.variables[node.targets[0].id] = IntValue(self.current_stack_position)
 
     def visit_Name(self, node):
@@ -216,11 +265,16 @@ class ClacCompile(ast.NodeVisitor):
 
         self.current_stack_position -= 1
 
-        compiled = self.compile_expr_as_block(node.body)
+        compiled, nsl = self.compile_expr_as_block(node.body)
         body_block = create_if_block(compiled)
 
-        compiled_else = self.compile_expr_as_block(node.orelse)
+        compiled_else, nsl_e = self.compile_expr_as_block(node.orelse)
         else_block = create_if_block(compiled_else)
+
+        assert nsl == nsl_e, "both sides of if statement must result in consistent stack behavior"
+        self.current_stack_position = nsl
+
+        # assert new_compile.current_stack_position == self.current_stack_position, "if statement blocks must not affect the stack"
 
         self.generated += f" if {body_block} 1 skip {else_block} "
 
@@ -263,8 +317,8 @@ class ClacCompile(ast.NodeVisitor):
             new_compile.visit(stmt)
 
         # required to not mess up the if statement
-        assert new_compile.current_stack_position == self.current_stack_position, "if statement blocks must not affect the stack"
-        return new_compile.generated
+        # assert new_compile.current_stack_position == self.current_stack_position, "if statement blocks must not affect the stack"
+        return new_compile.generated, new_compile.current_stack_position
     
 def create_if_block(gen: str) -> str:
     id = len(if_blocks)
