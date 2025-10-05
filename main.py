@@ -133,7 +133,8 @@ class ClacCompile(ast.NodeVisitor):
             # do naive check for true (it should just be the last element)
             found_ret = node.body[-1]
         else:
-            found_ret = well_defined_if()
+            # found_ret = well_defined_if()
+            found_ret = node.body[-1]
             # recursively check all ifs. If one of the ifs has a return, then the other must have as well
 
 
