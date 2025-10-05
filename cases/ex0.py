@@ -1,24 +1,28 @@
-def const() -> tuple:
-    x = 66
-    def lol() -> tuple:
-        return x + 1, 0
+# def const() -> tuple:
+#     x = 66
+#     def lol() -> tuple:
+#         return x + 1, 0
     
-    def g(x: int) -> None:
-        print(x)
+#     def g(x: int) -> None:
+#         print(x)
 
-    g(5)
-    a = lol()[0]
-    b = (2, 1234)[1]
-    return a,b
-print(const())
-# def tuple_double(x: tuple):
+#     a = lol()[0]
+#     b = (2, 1234)[1]
+#     g(a)
+#     return a,b
+
+# def tuple_double(x: tuple) -> tuple:
 #     return x[0] * 2, x[1] * 2
 
-# def double(x: int):
-#     if (x):
-#         return x * 2
-#     else:
-#         return x + 67
+# def fib(x: int, y: int) -> int:
+#     print(x)
+#     return fib(x+y, x)
 
-# def main():
-#     return 1
+def double(x: int) -> int:
+    if (x):
+        return x * 2
+    else:
+        return 1
+
+def main() -> int:
+    return 1
