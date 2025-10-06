@@ -1,8 +1,8 @@
-def sqrt(n: int):
-    def sqrt_inner(i):
-        if n < (i + 1) * (i + 1):
+def sqrt(n: int) -> int:
+    def sqrt_inner(n: int, i: int) -> int:
+        if n < (i + 1) ** 2:
             return i
         else:
-            return sqrt_inner(i+1)
+            return sqrt_inner(n, i+1)
     
-    return sqrt_inner(0)
+    return sqrt_inner(n, 0)

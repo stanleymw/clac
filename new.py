@@ -55,6 +55,7 @@ class ClacFunc:
     code: list[OpCode]
     children: list #list of clacfuncs
 
+
 ClacValue = ClacVoid | ClacInt | PyTuple | ClacFunc
 
 @dataclass
@@ -284,10 +285,15 @@ class FunctionCompiler(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef):
         print(f"visiting with stack size: {self.stack_size}")
         # FIXME: children functions cannot use parent locals correctly if stack gets misaligned between compilation and call (like if something else gets pushed onto the stack)
+        
+        # node.name
         compiler = FunctionCompiler(node, self.names.copy(), self.stack_size)
         res = compiler.compile()
         local_name = res.name
-        res.name = f"{self.func.name}__{local_name}"
+
+        # FIXME: hoisting can lead to namespacing issues, this fix doesn't work if the hoisted function calls itself recursively
+        # res.name = f"{self.func.name}__{local_name}"
+
         print(f"Compiled child: {res}")
         self.children_functions.append(res)
         self.names[local_name] = res

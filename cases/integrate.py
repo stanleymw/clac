@@ -22,7 +22,7 @@ def sub(n1: tuple, n2: tuple) -> tuple:
     # assuming that s1 and s2 are the same, otherwise we must convert res = lcm(s1,s2)
     return n1[0] - n2[0], n1[1]
 
-def mul_trunc(n1: tuple, n2: tuple) -> tuple:
+def mul(n1: tuple, n2: tuple) -> tuple:
     return (n1[0]*n2[0]) // n1[1], n1[1]
     # 'a/b * c/d = ac/bd = (ac * (1/d))/(bd * 1/d) = ac/b'
     # print(f"{n1[0]/n1[1]} * {n2[0]/n2[1]} ~= {res[0]/res[1]}")
@@ -31,14 +31,15 @@ def make_fixed(n: int) -> tuple:
     return n*prec(), prec()
 
 def f(x: tuple) -> tuple:
-    # return add(add(mul_trunc(x,x),mul_trunc(make_fixed(2), x)), make_fixed(1))
-    return mul_trunc(x,x)
+    return add(add(mul(x,x),mul(make_fixed(2), x)), make_fixed(1))
+    # return mul_trunc(x,x)
 
 def update(x: tuple, sum: tuple, lim: tuple) -> tuple:
     # print(f"x: {x} | sum: {sum} | lim: {lim}")
+    # print(sum[0])
     d = delta()
 
-    sum2 = add(sum, mul_trunc(f(x), d))
+    sum2 = add(sum, mul(f(x), d))
     x2 = add(x, d)
 
     dif = sub(x2, lim)[0] 
@@ -50,12 +51,14 @@ def update(x: tuple, sum: tuple, lim: tuple) -> tuple:
         # x >= lim
         return sum2
 
-def integrate(lower: tuple, upper: tuple) -> tuple:
+def integrate_i(lower: tuple, upper: tuple) -> tuple:
     return update(lower, (0,prec()), upper)
 
-def run() -> None:
-    x = integrate(make_fixed(0), make_fixed(5))
-    print(x[0])
-    print(x[1])
+def integrate(lower: tuple, upper: tuple) -> None:
+    res = integrate_i(lower, upper)
+    print(res[0])
+    print(res[1])
 
+def run() -> None:
+    integrate(make_fixed(2), make_fixed(8))
 run()
