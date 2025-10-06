@@ -166,11 +166,6 @@ with open(sys.argv[1], "r") as f:
 # tree = ast.parse(source5)
 print(ast.dump(tree, indent=4))
 
-preamble = """
-: dup 1 pick ;
-: noop ;
-"""
-
 def generate_error_message(message: str, node: ast.expr | ast.stmt):
     return f"{message} | Line {node.lineno} Col {node.col_offset}"
 
@@ -505,7 +500,118 @@ def assemble(func: ClacFunc) -> list[list[str]]:
 
 
 globally_known_functions: dict[str, ClacValue] = {"print": ClacFunc("print", 1, 0, [], [])}
-res = []
+res = [
+    ": __README This program was compiled by Stanley's cclac (Python -> Clac) compiler (github.com/stanleymw/clac) ;",
+
+    ": dup 2 pick 2 pick ;",
+]
+
+docs = [
+"""
+: __COMMENT
+
+This program is a numerical integrator.  
+It allows you to integrate custom continuous functions.
+
+-------- DEMO
+This program comes with f(x) = x^2 + x + 1 as the default function,
+and the bounds 0 to 8 as the default. You can execute:
+`run`
+to see the result of this integration f(x) from 0 to 8
+
+
+For usage information:
+--------- SuperNumber format:
+Note that this program uses two integers to represent decimal numbers.
+Specifically, having [a b] on the stack represents a/b. We will refer to this as
+a SuperNumber.
+
+For instance, if you wanted to represent 12.345 as a SuperNumber,
+you would put [12345 1000]. 45.678 would be represented as [45678 1000].
+
+PLEASE NOTE: FOR OPTIMAL RESULTS (least inaccuracy due to overflow/roundoff), use SuperNumbers where b is
+1000. That is, only use SuperNumbers of the form [a 1000].
+
+ALSO NOTE: The program also provides the `convert` function to convert from
+standard Clac integers to Super Numbers. (It converts to b=1000 by default). 
+
+For instance, running:
+12 convert
+will result in:
+12000 1000
+
+-------- Arithmetic:
+Firstly, you must define your function f, which takes in a SuperNumber. You can
+assume that when your function f is called, the SuperNumber is the topmost element
+on the stack. (technically it is 2 elements since each SuperNumber is composed
+of two integers)
+
+**IMPORTANT**: Do not use Clac arithmetic operators in your function. It will break the integrator.
+Instead, you may use these functions:
+
+add (analogue to +)
+sub (analogue to -)
+mul (analogue to *)
+
+dup (duplicate the supernumber at the top of stack)
+
+They should be used in the same manner as the normal Clac arithmetic functions. For instance,
+If you wanted to calculate 12.345 - 45.678, you would do
+
+12345 1000 45678 1000 sub
+
+Try it! You should get the SuperNumber representation of -33.333. (addition and multiplication works similarly)
+
+--------- Defining Functions:
+For instance, here is how to define f(x) = x + x^2 + 1.
+
+Your stack starts with x in SuperNumber format:
+x
+
+so, you would want to `dup` to get:
+x x
+
+then `dup` again to get
+x x x
+
+then, you can do `mul` to get:
+x x*x
+which is equivalent to
+x x^2
+
+then, you can `add` to get
+x+x^2
+
+then, you can do `1 convert` to get
+x+x^2 1
+
+the, you can do `add` to get
+x + x^2 + 1
+
+which is x^2. Therefore, f would look like: ;
+
+: f dup dup mul add 1 convert add ;
+
+:  __COMMENT
+Once you have defined f, you can 
+
+a b integrate
+
+To integrate f from a to b (a and b must be in SuperNumber format)
+
+PLEASE USE 1000 as the scaling factor.
+For instance,
+
+12345 1000 45678 1000 integrate
+
+will integrate f(x) = x^2 + x + 1 (or whatever f you define) from 12.345 to 45.678.
+;
+"""
+]
+
+res = res + docs
+
+
 for i in tree.body:
     if isinstance(i, ast.FunctionDef):
         c = FunctionCompiler(i, globally_known_functions, 0)
@@ -517,7 +623,11 @@ for i in tree.body:
         for i in assembled:
             res.append(" ".join(i))
 
-print("\n".join(res))
+
+
+final = "\n".join(res)
+
+print(final)
 
 # cv = ClacCompile(0, "")
 # compiled = cv.compile(tree)
@@ -526,5 +636,5 @@ print("\n".join(res))
 # print(res)
 # print([(i,v.value) for (i,v) in cv.variables.items()])
 # print("Stack pos:", cv.current_stack_position)
-# with open("output.clac", "w") as w:
-#     w.write(res)
+with open("out.clac", "w") as w:
+    w.write(final)

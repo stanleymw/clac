@@ -27,11 +27,11 @@ def mul(n1: tuple, n2: tuple) -> tuple:
     # 'a/b * c/d = ac/bd = (ac * (1/d))/(bd * 1/d) = ac/b'
     # print(f"{n1[0]/n1[1]} * {n2[0]/n2[1]} ~= {res[0]/res[1]}")
 
-def make_fixed(n: int) -> tuple:
+def convert(n: int) -> tuple:
     return n*prec(), prec()
 
 def f(x: tuple) -> tuple:
-    return add(add(mul(x,x),mul(make_fixed(2), x)), make_fixed(1))
+    return add(add(mul(x,x), x), convert(1))
     # return mul_trunc(x,x)
 
 def update(x: tuple, sum: tuple, lim: tuple) -> tuple:
@@ -60,5 +60,6 @@ def integrate(lower: tuple, upper: tuple) -> None:
     print(res[1])
 
 def run() -> None:
-    integrate(make_fixed(2), make_fixed(8))
+    integrate(convert(0), convert(8))
+
 run()
