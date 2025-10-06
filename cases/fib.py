@@ -1,3 +1,6 @@
-def fib(x,y):
+def fib(x: int, y: int) -> int:
     print(x)
-    return fib(x+y,x)
+    if 1000 < x:
+        return y
+    else:
+        return fib(x+y, x)

@@ -1,13 +1,13 @@
-def fun(n):
+def fun(n: int) -> None:
     print(n)
+
     return
 
-def loop(n):
+def loop(n: int) -> None:
     fun(n)
     if 0 < n:
         loop(n-1)
     else:
         pass
-    return
 
-loop(100)
+    return
