@@ -19,32 +19,38 @@ from abc import ABC, abstractmethod
 # Pick | ss X
 # Skip | ss -= 1
 
+
 @dataclass
 class ClacExpression:
     pass
 
-# all possible value types 
+
+# all possible value types
 class ClacVoid:
     pass
+
 
 @dataclass
 class ClacInt:
     # val: int
     position: int
 
+
 # a pytuple is just two ClacInts right next to each other
 @dataclass
 class PyTuple:
     position: int
 
+
 class OpCode(ABC):
     @abstractmethod
     def stack_delta(self) -> int:
         raise Exception()
-    
+
     @abstractmethod
     def assemble(self) -> str:
         raise Exception()
+
 
 @dataclass
 class ClacFunc:
@@ -53,39 +59,45 @@ class ClacFunc:
     ret_count: int
 
     code: list[OpCode]
-    children: list #list of clacfuncs
+    children: list  # list of clacfuncs
 
 
 ClacValue = ClacVoid | ClacInt | PyTuple | ClacFunc
+
 
 @dataclass
 class If(OpCode):
     def stack_delta(self):
         return -1
-    
+
     def assemble(self) -> str:
         return "if"
+
 
 class Swap(OpCode):
     def stack_delta(self):
         return 0
-    
+
     def assemble(self):
         return "swap"
+
 
 class Rot(OpCode):
     def stack_delta(self):
         return 0
-    
+
     def assemble(self):
         return "rot"
+
 
 @dataclass
 class Pick(OpCode):
     def stack_delta(self):
         return 0
+
     def assemble(self):
         return "pick"
+
 
 class Skip(OpCode):
     def stack_delta(self):
@@ -94,7 +106,7 @@ class Skip(OpCode):
     def assemble(self):
         return "skip"
 
-    
+
 class Drop(OpCode):
     def stack_delta(self):
         return -1
@@ -102,9 +114,11 @@ class Drop(OpCode):
     def assemble(self):
         return "drop"
 
+
 @dataclass
 class Push(OpCode):
     value: int
+
     def stack_delta(self):
         # match (self.value):
         #     case int():
@@ -114,27 +128,31 @@ class Push(OpCode):
     def assemble(self):
         return f"{self.value}"
 
+
 @dataclass
 class Call(OpCode):
     func: ClacFunc
 
     def assemble(self):
         return f"{self.func.name}"
-    
+
     def stack_delta(self) -> int:
         return self.func.ret_count - self.func.arg_count
+
 
 @dataclass
 class BinOp(OpCode):
     operator: str
+
     def stack_delta(self):
         return -1
 
     def assemble(self):
         return f"{self.operator}"
 
+
 def match_operator_to_BinOp(op: ast.operator | ast.cmpop) -> BinOp:
-    match (op):
+    match op:
         case ast.Add():
             return BinOp("+")
         case ast.Sub():
@@ -152,11 +170,12 @@ def match_operator_to_BinOp(op: ast.operator | ast.cmpop) -> BinOp:
         case _:
             raise Exception(f"Non-existent BinOp: {op}")
 
+
 compares = {
     "Lt": "<",
 }
 
-if (len(sys.argv) < 2):
+if len(sys.argv) < 2:
     print("Usage: ./main.py <file.py>")
     exit()
 
@@ -166,13 +185,15 @@ with open(sys.argv[1], "r") as f:
 # tree = ast.parse(source5)
 print(ast.dump(tree, indent=4))
 
+
 def generate_error_message(message: str, node: ast.expr | ast.stmt):
     return f"{message} | Line {node.lineno} Col {node.col_offset}"
+
 
 # ClacCompile should be created for all FunctionDef
 class FunctionCompiler(ast.NodeVisitor):
     # given a FunctionDef, and names, the function compiler should be able to compile this function and all of it's children
-    def __init__(self, fun: ast.FunctionDef, names: dict[str, ClacValue], stack_size = 0):
+    def __init__(self, fun: ast.FunctionDef, names: dict[str, ClacValue], stack_size=0):
         self.func: ast.FunctionDef = fun
 
         self.if_counter = 0
@@ -188,23 +209,36 @@ class FunctionCompiler(ast.NodeVisitor):
 
         # assume that caller put these args on the stack in the correct order
         for arg in args:
-            assert arg.annotation, f"All function arguments must be type annotated | Line {arg.lineno}"
-            assert isinstance(arg.annotation, ast.Name), generate_error_message("All function arguments must be type annotated with Name", arg.annotation)
+            assert arg.annotation, (
+                f"All function arguments must be type annotated | Line {arg.lineno}"
+            )
+            assert isinstance(arg.annotation, ast.Name), generate_error_message(
+                "All function arguments must be type annotated with Name",
+                arg.annotation,
+            )
             match arg.annotation.id:
                 case "int":
                     self.stack_size += 1
                     self.names[arg.arg] = ClacInt(self.stack_size)
                 case "tuple":
                     self.stack_size += 2
-                    self.names[arg.arg] = PyTuple(self.stack_size-1)
+                    self.names[arg.arg] = PyTuple(self.stack_size - 1)
                 case _:
-                    raise Exception(f"Unknown Type! Expecting int or tuple | Line {arg.lineno}")
-                
+                    raise Exception(
+                        f"Unknown Type! Expecting int or tuple | Line {arg.lineno}"
+                    )
+
         self.argument_size_resolved = self.stack_size - self.parent_stack_size
-                
+
         return_size = 0
-        assert self.func.returns, generate_error_message("All function return must be type annotated", self.func)
-        assert isinstance(self.func.returns, ast.Name) or isinstance(self.func.returns, ast.Constant), generate_error_message("All function arguments must be type annotated with Name", self.func.returns)
+        assert self.func.returns, generate_error_message(
+            "All function return must be type annotated", self.func
+        )
+        assert isinstance(self.func.returns, ast.Name) or isinstance(
+            self.func.returns, ast.Constant
+        ), generate_error_message(
+            "All function arguments must be type annotated with Name", self.func.returns
+        )
         match self.func.returns:
             case ast.Name():
                 match self.func.returns.id:
@@ -218,21 +252,21 @@ class FunctionCompiler(ast.NodeVisitor):
                 assert self.func.returns.value is None
             case _:
                 raise Exception()
-                
-        self.names[self.func.name] = ClacFunc(self.func.name, self.argument_size_resolved, return_size, [], [])
 
+        self.names[self.func.name] = ClacFunc(
+            self.func.name, self.argument_size_resolved, return_size, [], []
+        )
 
         self.queue: list[OpCode] = []
         self.children_functions: list[ClacFunc] = []
 
         print(f"Function Compiler initialized: {self.stack_size} stack size")
 
-
     def visit_arguments(self, node: ast.arguments):
         print("Already visited args in function def")
 
     def add_opcode_to_queue(self, opcode: OpCode):
-        print(f"adding {opcode} | delta: {opcode.stack_delta()}")
+        # print(f"adding {opcode} | delta: {opcode.stack_delta()}")
         self.queue.append(opcode)
         self.stack_size += opcode.stack_delta()
 
@@ -241,7 +275,9 @@ class FunctionCompiler(ast.NodeVisitor):
         self.visit(expr)
         expr_size: int = self.stack_size - old_size
 
-        assert 0 <= expr_size <= 2, generate_error_message(f"0 <= expression_size <= 2 must hold for expr={expr}", expr)
+        assert 0 <= expr_size <= 2, generate_error_message(
+            f"0 <= expression_size <= 2 must hold for expr={expr}", expr
+        )
         print(f"Evaluated {expr} -> {expr_size}")
 
         match expr_size:
@@ -253,7 +289,7 @@ class FunctionCompiler(ast.NodeVisitor):
                 return PyTuple
             case _:
                 raise Exception(generate_error_message("Unknown expresion type", expr))
-            
+
     def func_visit(self, node: ast.FunctionDef):
         """Called if no explicit visitor function exists for a node."""
         for field, value in ast.iter_fields(node):
@@ -269,18 +305,26 @@ class FunctionCompiler(ast.NodeVisitor):
 
     def compile(self) -> ClacFunc:
         self.func_visit(self.func)
-        print(f"{self.func.name}-> final names:", self.names)
-        return ClacFunc(self.func.name, self.argument_size_resolved, self.stack_size - self.parent_stack_size, self.queue, self.children_functions)
-    
+        # print(f"{self.func.name}-> final names:", self.names)
+        return ClacFunc(
+            self.func.name,
+            self.argument_size_resolved,
+            self.stack_size - self.parent_stack_size,
+            self.queue,
+            self.children_functions,
+        )
+
     def visit_Constant(self, node: ast.Constant):
         # node.value
-        assert isinstance(node.value, int), generate_error_message("All constant values must be integers!", node)
+        assert isinstance(node.value, int), generate_error_message(
+            "All constant values must be integers!", node
+        )
         self.add_opcode_to_queue(Push(node.value))
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         print(f"visiting with stack size: {self.stack_size}")
         # FIXME: children functions cannot use parent locals correctly if stack gets misaligned between compilation and call (like if something else gets pushed onto the stack)
-        
+
         # node.name
         compiler = FunctionCompiler(node, self.names.copy(), self.stack_size)
         res = compiler.compile()
@@ -294,18 +338,19 @@ class FunctionCompiler(ast.NodeVisitor):
         self.names[local_name] = res
 
     def visit_ReturnWithKnownDataAlreadyOnStack(self, returnType: type[ClacValue]):
+        print("!!!!!!! return:", self.func)
         match returnType:
             case cls if cls is ClacVoid:
-                while (self.stack_size > self.parent_stack_size):
+                while self.stack_size > self.parent_stack_size:
                     self.add_opcode_to_queue(Drop())
 
             case cls if cls is ClacInt:
-                while (self.stack_size > self.parent_stack_size + 1):
+                while self.stack_size > self.parent_stack_size + 1:
                     self.add_opcode_to_queue(Swap())
                     self.add_opcode_to_queue(Drop())
 
             case cls if cls is PyTuple:
-                while (self.stack_size > self.parent_stack_size + 2):
+                while self.stack_size > self.parent_stack_size + 2:
                     self.add_opcode_to_queue(Rot())
                     self.add_opcode_to_queue(Drop())
             case _:
@@ -321,9 +366,13 @@ class FunctionCompiler(ast.NodeVisitor):
         self.visit_ReturnWithKnownDataAlreadyOnStack(expr_type)
 
     def visit_Assign(self, node: ast.Assign):
-        assert len(node.targets) == 1, generate_error_message("Can only assign to one variable", node)
+        assert len(node.targets) == 1, generate_error_message(
+            "Can only assign to one variable", node
+        )
         name = node.targets[0]
-        assert isinstance(name, ast.Name), generate_error_message("Must assign to name", node)
+        assert isinstance(name, ast.Name), generate_error_message(
+            "Must assign to name", node
+        )
 
         expr_type = self.eval_expression_and_get_type(node.value)
         print(f"{name.id} :: {expr_type}")
@@ -336,9 +385,11 @@ class FunctionCompiler(ast.NodeVisitor):
                 self.names[name.id] = PyTuple(self.stack_size - 1)
             case _:
                 raise Exception()
-    
+
     def visit_Subscript(self, node: ast.Subscript):
-        assert isinstance(node.ctx, ast.Load), generate_error_message("Can only use subscript to access elements", node)
+        assert isinstance(node.ctx, ast.Load), generate_error_message(
+            "Can only use subscript to access elements", node
+        )
         # we should load whatever is at value first
 
         val = self.eval_expression_and_get_type(node.value)
@@ -356,7 +407,9 @@ class FunctionCompiler(ast.NodeVisitor):
         self.add_opcode_to_queue(Push(2))
 
         subscript = self.eval_expression_and_get_type(node.slice)
-        assert subscript == ClacInt, generate_error_message("subscript must be ClacInt", node)
+        assert subscript == ClacInt, generate_error_message(
+            "subscript must be ClacInt", node
+        )
 
         # val[0] val[1] subscript
         # TODO: statically verify that subscript is within bounds
@@ -376,23 +429,33 @@ class FunctionCompiler(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name):
         match node.ctx:
             case ast.Load():
-                assert node.id in self.names, f"Variable/identifier not found: {node.id} | Line {node.lineno}"
+                assert node.id in self.names, (
+                    f"Variable/identifier not found: {node.id} | Line {node.lineno}"
+                )
 
                 val = self.names[node.id]
-                print(f"Loading {node.id} -> {val} @ {self.stack_size}.size")
+                # print(f"Loading {node.id} -> {val} @ {self.stack_size}.size")
                 match val:
                     case ClacInt():
-                        self.add_opcode_to_queue(Push(self.absolute_pos_relative_pick_offset(val.position)))
+                        self.add_opcode_to_queue(
+                            Push(self.absolute_pos_relative_pick_offset(val.position))
+                        )
                         self.add_opcode_to_queue(Pick())
                     case PyTuple():
-                        self.add_opcode_to_queue(Push(self.absolute_pos_relative_pick_offset(val.position)))
+                        self.add_opcode_to_queue(
+                            Push(self.absolute_pos_relative_pick_offset(val.position))
+                        )
                         self.add_opcode_to_queue(Pick())
 
-                        self.add_opcode_to_queue(Push(self.absolute_pos_relative_pick_offset(val.position + 1)))
+                        self.add_opcode_to_queue(
+                            Push(
+                                self.absolute_pos_relative_pick_offset(val.position + 1)
+                            )
+                        )
                         self.add_opcode_to_queue(Pick())
                     case ClacFunc:
                         pass
-                print("Loaded:", self.queue)
+                # print("Loaded:", self.queue)
             case ast.Store():
                 # raise Exception()
                 print("storing", node.id)
@@ -401,7 +464,9 @@ class FunctionCompiler(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call):
         assert isinstance(node.func, ast.Name)
-        assert node.func.id in self.names, generate_error_message(f"Trying to call nonexistent function {node.func.id}", node)
+        assert node.func.id in self.names, generate_error_message(
+            f"Trying to call nonexistent function {node.func.id}", node
+        )
 
         to_call = self.names[node.func.id]
         assert isinstance(to_call, ClacFunc)
@@ -425,17 +490,27 @@ class FunctionCompiler(ast.NodeVisitor):
         self.add_opcode_to_queue(If())
 
         # compile body
-        body = ast.FunctionDef(name=f"{self.func.name}__IF__{self.if_counter}", args=ast.arguments(), body=node.body, returns=ast.Constant(value=None))
+        body = ast.FunctionDef(
+            name=f"{self.func.name}__IF__{self.if_counter}",
+            args=ast.arguments(),
+            body=node.body,
+            returns=ast.Constant(value=None),
+        )
         body_compiler = FunctionCompiler(body, self.names.copy(), self.stack_size)
         self.if_counter += 1
 
         # compile orelse
-        orelse = ast.FunctionDef(name=f"{self.func.name}__IF__{self.if_counter}", args=ast.arguments(), body=node.orelse, returns=ast.Constant(value=None))
+        orelse = ast.FunctionDef(
+            name=f"{self.func.name}__IF__{self.if_counter}",
+            args=ast.arguments(),
+            body=node.orelse,
+            returns=ast.Constant(value=None),
+        )
         orelse_compiler = FunctionCompiler(orelse, self.names.copy(), self.stack_size)
         self.if_counter += 1
 
-        compiled_body = (body_compiler.compile())
-        compiled_orelse = (orelse_compiler.compile())
+        compiled_body = body_compiler.compile()
+        compiled_orelse = orelse_compiler.compile()
 
         self.children_functions.append(compiled_body)
         self.add_opcode_to_queue(Call(compiled_body))
@@ -446,14 +521,13 @@ class FunctionCompiler(ast.NodeVisitor):
         self.children_functions.append(compiled_orelse)
         self.add_opcode_to_queue(Call(compiled_orelse))
 
-
         assert compiled_body.ret_count == compiled_orelse.ret_count
 
         # TODO: implement cleaner fix for call double counting
         self.stack_size -= compiled_body.ret_count
 
         ret_type: type[ClacValue]
-        match (compiled_body.ret_count):
+        match compiled_body.ret_count:
             case 0:
                 ret_type = ClacVoid
             case 1:
@@ -477,6 +551,7 @@ class FunctionCompiler(ast.NodeVisitor):
         self.generic_visit(node)
         self.add_opcode_to_queue(match_operator_to_BinOp(node.ops[0]))
 
+
 # def create_block(gen: str) -> str:
 #     id = len(if_blocks)
 #     name = get_block_name_from_id(id)
@@ -486,9 +561,10 @@ class FunctionCompiler(ast.NodeVisitor):
 # def get_block_name_from_id(id: int) -> str:
 #     return f"__CLACC_IF_BLOCK_{id}_"
 
+
 def assemble(func: ClacFunc) -> list[list[str]]:
     out: list[list[str]] = []
-    
+
     # assemble children
     for i in func.children:
         for child_function in assemble(i):
@@ -499,135 +575,32 @@ def assemble(func: ClacFunc) -> list[list[str]]:
     return out
 
 
-globally_known_functions: dict[str, ClacValue] = {"print": ClacFunc("print", 1, 0, [], [])}
+globally_known_functions: dict[str, ClacValue] = {
+    "print": ClacFunc("print", 1, 0, [], [])
+}
 res = [
     ": __README This program was compiled by Stanley's cclac (Python -> Clac) compiler (github.com/stanleymw/clac) ;",
-
     ": dup 2 pick 2 pick ;",
 ]
 
-docs = [
-"""
-: __COMMENT
-
-This program is a numerical integrator.  
-It allows you to integrate custom continuous functions.
-
--------- DEMO
-This program comes with f(x) = x^2 + x + 1 as the default function,
-and the bounds 0 to 8 as the default. You can execute:
-`run`
-to see the result of this integration f(x) from 0 to 8
-
-
-For usage information:
---------- SuperNumber format:
-Note that this program uses two integers to represent decimal numbers.
-Specifically, having [a b] on the stack represents a/b. We will refer to this as
-a SuperNumber.
-
-For instance, if you wanted to represent 12.345 as a SuperNumber,
-you would put [12345 1000]. 45.678 would be represented as [45678 1000].
-
-PLEASE NOTE: FOR OPTIMAL RESULTS (least inaccuracy due to overflow/roundoff), use SuperNumbers where b is
-1000. That is, only use SuperNumbers of the form [a 1000].
-
-ALSO NOTE: The program also provides the `convert` function to convert from
-standard Clac integers to Super Numbers. (It converts to b=1000 by default). 
-
-For instance, running:
-12 convert
-will result in:
-12000 1000
-
--------- Arithmetic:
-Firstly, you must define your function f, which takes in a SuperNumber. You can
-assume that when your function f is called, the SuperNumber is the topmost element
-on the stack. (technically it is 2 elements since each SuperNumber is composed
-of two integers)
-
-**IMPORTANT**: Do not use Clac arithmetic operators in your function. It will break the integrator.
-Instead, you may use these functions:
-
-add (analogue to +)
-sub (analogue to -)
-mul (analogue to *)
-
-dup (duplicate the supernumber at the top of stack)
-
-They should be used in the same manner as the normal Clac arithmetic functions. For instance,
-If you wanted to calculate 12.345 - 45.678, you would do
-
-12345 1000 45678 1000 sub
-
-Try it! You should get the SuperNumber representation of -33.333. (addition and multiplication works similarly)
-
---------- Defining Functions:
-For instance, here is how to define f(x) = x + x^2 + 1.
-
-Your stack starts with x in SuperNumber format:
-x
-
-so, you would want to `dup` to get:
-x x
-
-then `dup` again to get
-x x x
-
-then, you can do `mul` to get:
-x x*x
-which is equivalent to
-x x^2
-
-then, you can `add` to get
-x+x^2
-
-then, you can do `1 convert` to get
-x+x^2 1
-
-the, you can do `add` to get
-x + x^2 + 1
-
-which is x^2. Therefore, f would look like: ;
-
-: f dup dup mul add 1 convert add ;
-
-:  __COMMENT
-Once you have defined f, you can 
-
-a b integrate
-
-To integrate f from a to b (a and b must be in SuperNumber format)
-
-PLEASE USE 1000 as the scaling factor.
-For instance,
-
-12345 1000 45678 1000 integrate
-
-will integrate f(x) = x^2 + x + 1 (or whatever f you define) from 12.345 to 45.678.
-;
-"""
-]
-
+docs = []
 res = res + docs
-
 
 for i in tree.body:
     if isinstance(i, ast.FunctionDef):
         c = FunctionCompiler(i, globally_known_functions, 0)
-        compiled = (c.compile())
+        compiled = c.compile()
         assembled = assemble(compiled)
 
-        print(f"Compiled: {compiled} \n Assembled: {assembled}")
+        # print(f"Compiled: {compiled} \n Assembled: {assembled}")
         globally_known_functions[compiled.name] = compiled
         for i in assembled:
             res.append(" ".join(i))
 
 
-
 final = "\n".join(res)
 
-print(final)
+# print(final)
 
 # cv = ClacCompile(0, "")
 # compiled = cv.compile(tree)
